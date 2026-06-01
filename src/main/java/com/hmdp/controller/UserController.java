@@ -3,10 +3,16 @@ package com.hmdp.controller;
 
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.UserInfo;
 import com.hmdp.service.IUserInfoService;
 import com.hmdp.service.IUserService;
+import com.hmdp.utils.UserHolder;
+import com.hmdp.entity.User;
+
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -25,19 +31,25 @@ import javax.servlet.http.HttpSession;
 @RequestMapping("/user")
 public class UserController {
 
+    private final BlogCommentsController blogCommentsController;
+
     @Resource
     private IUserService userService;
 
     @Resource
     private IUserInfoService userInfoService;
 
+    UserController(BlogCommentsController blogCommentsController) {
+        this.blogCommentsController = blogCommentsController;
+    }
+
     /**
      * 发送手机验证码
      */
     @PostMapping("code")
     public Result sendCode(@RequestParam("phone") String phone, HttpSession session) {
-        // TODO 发送短信验证码并保存验证码
-        return Result.fail("功能未完成");
+        //  发送短信验证码并保存验证码
+        return userService.sendCode(phone, session);
     }
 
     /**
@@ -46,8 +58,8 @@ public class UserController {
      */
     @PostMapping("/login")
     public Result login(@RequestBody LoginFormDTO loginForm, HttpSession session){
-        // TODO 实现登录功能
-        return Result.fail("功能未完成");
+        // 实现登录功能
+        return userService.login(loginForm, session);
     }
 
     /**
@@ -62,8 +74,11 @@ public class UserController {
 
     @GetMapping("/me")
     public Result me(){
-        // TODO 获取当前登录的用户并返回
-        return Result.fail("功能未完成");
+        UserDTO userDTO = UserHolder.getUser();
+        User user = new User();
+        BeanUtils.copyProperties(userDTO, user);
+        return Result.ok(user);
+
     }
 
     @GetMapping("/info/{id}")
