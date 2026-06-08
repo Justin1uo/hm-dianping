@@ -79,7 +79,7 @@ public class CacheClient {
         this.set(key, result, expireTime, timeunit);
 
 
-        return null;
+        return result;
     }
 
         public <R, ID> R queryWithLogicalExpire(
