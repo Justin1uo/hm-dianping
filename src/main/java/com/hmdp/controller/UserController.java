@@ -74,9 +74,7 @@ public class UserController {
 
     @GetMapping("/me")
     public Result me(){
-        UserDTO userDTO = UserHolder.getUser();
-        User user = new User();
-        BeanUtils.copyProperties(userDTO, user);
+        User user = UserHolder.getUser();
         return Result.ok(user);
 
     }

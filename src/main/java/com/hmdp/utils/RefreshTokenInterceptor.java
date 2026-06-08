@@ -45,12 +45,12 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
                 if (userMap.isEmpty()) {
                    return true;
                 }
-                //4.将拿的的Hash对象转成UserDTO
-                UserDTO userDTO = new UserDTO();
-                cn.hutool.core.bean.BeanUtil.fillBeanWithMap(userMap, userDTO, false);
+                //4.将拿的的Hash对象转成User
+                User user = new User();
+                cn.hutool.core.bean.BeanUtil.fillBeanWithMap(userMap, user, false);
                
                 //5.如果存在，保存到ThreadLocal
-                UserHolder.saveUser(userDTO);
+                UserHolder.saveUser(user);
                 //6.刷新token有效期
                 stringRedisTemplate.expire(key, RedisConstants.LOGIN_USER_TTL, TimeUnit.MINUTES);
                 
