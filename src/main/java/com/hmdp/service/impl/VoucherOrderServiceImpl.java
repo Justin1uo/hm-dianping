@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 
 import javax.annotation.Resource;
 
+import org.springframework.aop.framework.AopContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
  * @since 2021-12-22
  */
 @Service
-@Transactional
 public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder> implements IVoucherOrderService {
 
     @Resource
@@ -54,12 +54,44 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         if (seckillVoucher.getStock() < 1) {
             return Result.fail("库存不足");
         }
-       //5.扣除库存
-        boolean success = seckillVoucherService.update().setSql("stock = stock - 1").eq("voucher_id", voucherId).update();
+        
+        Long userId = UserHolder.getUser().getId();
+
+        synchronized (userId.toString().intern()) {
+            //获取当前线程的代理对象
+            //为什么需要代理对象？
+            //因为当前线程是调用createVoucherOrder方法的线程，而createVoucherOrder方法是@Transactional注解的，
+            //所以需要代理对象来调用createVoucherOrder方法，才能实现事务的开启和提交
+            IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
+            return proxy.createVoucherOrder(voucherId);
+        }
+    }
+
+
+    @Transactional
+    public Result createVoucherOrder(Long voucherId) {
+        //5.判断用户是否已购买
+        Long userId = UserHolder.getUser().getId();
+
+         int count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
+         if (count > 0) {
+             return Result.fail("用户已购买过该优惠券");
+         }
+
+
+       //6.扣除库存
+        boolean success = seckillVoucherService.update()
+                                                .setSql("stock = stock - 1")
+                                                //只要此线程更新时候的库存数量大于0，才更新库存（乐观锁：防止并发更新库存导致库存负数）
+                                                .eq("voucher_id", voucherId).gt("stock", 0) 
+                                                .update();
         if (!success) {
             return Result.fail("库存扣除失败");
         }
-       //6.创建订单
+
+        
+
+       //7.创建订单
         VoucherOrder voucherOrder = new VoucherOrder();
         long orderId = redisIdWorker.nextId("order");
 
@@ -69,7 +101,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         voucherOrder.setVoucherId(voucherId);//设置优惠券id
 
         save(voucherOrder);
-       //7.返回订单id
+       //8.返回订单id
        return Result.ok(orderId);
     }
 
