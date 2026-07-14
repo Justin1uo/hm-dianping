@@ -1,5 +1,15 @@
 package com.hmdp.service.impl;
 
+import java.time.LocalDateTime;
+
+import javax.annotation.Resource;
+
+import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.SeckillVoucher;
 import com.hmdp.entity.VoucherOrder;
@@ -7,16 +17,8 @@ import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-
-import java.time.LocalDateTime;
-
-import javax.annotation.Resource;
-
-import org.springframework.aop.framework.AopContext;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * <p>
@@ -35,9 +37,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private RedisIdWorker redisIdWorker;
     
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+    
     @Override
     public Result seckillVoucher(Long voucherId) {
-       //1.查询优惠券
+        //1.查询优惠券
         SeckillVoucher seckillVoucher = seckillVoucherService.getById(voucherId);
         if (seckillVoucher == null) {
             return Result.fail("优惠券不存在");
@@ -56,15 +61,23 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
         
         Long userId = UserHolder.getUser().getId();
-
-        synchronized (userId.toString().intern()) {
-            //获取当前线程的代理对象
-            //为什么需要代理对象？
-            //因为当前线程是调用createVoucherOrder方法的线程，而createVoucherOrder方法是@Transactional注解的，
-            //所以需要代理对象来调用createVoucherOrder方法，才能实现事务的开启和提交
+        //创建锁对象
+        SimpleRedisLock lock = new SimpleRedisLock("order:" + userId, stringRedisTemplate);
+        
+        boolean isLock = lock.tryLock(1200);
+        if (!isLock) {
+            return Result.fail("请稍后再试");
+        }
+            
+        //获取当前线程的代理对象
+        try {
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
+        } finally {
+            //释放锁
+            lock.unlock();
         }
+        
     }
 
 
